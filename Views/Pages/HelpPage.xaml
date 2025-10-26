@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ElectronicSpreadsheet.Views.Pages.HelpPage"
+             Title="Довідка">
+
+    <ScrollView Padding="20">
+            <Label Text="Вероніка Буркова, K-25. Лабораторна робота №1. Варіант 53"
+                   FontSize="32"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center"
+                   TextColor="#2196F3" />
+
+
+    </ScrollView>
+
+</ContentPage>

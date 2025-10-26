@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ElectronicSpreadsheet.ViewModels"
+             x:Class="ElectronicSpreadsheet.MainPage"
+             Title="✨ Електронні таблиці ✨">
+
+    <ContentPage.BindingContext>
+        <viewmodels:MainViewModel />
+    </ContentPage.BindingContext>
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <!-- Рожева палітра кольорів -->
+            <Color x:Key="PrimaryPink">#FF69B4</Color>
+            <Color x:Key="LightPink">#FFB6C1</Color>
+            <Color x:Key="SoftPink">#FFC0CB</Color>
+            <Color x:Key="PastelPink">#FFE4E1</Color>
+            <Color x:Key="DeepPink">#FF1493</Color>
+            <Color x:Key="RosePink">#FF66B2</Color>
+            <Color x:Key="PeachPink">#FFB7CE</Color>
+
+            <!-- Стилі для кнопок -->
+            <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="{StaticResource PrimaryPink}" />
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="CornerRadius" Value="15" />
+                <Setter Property="Padding" Value="20,10" />
+                <Setter Property="FontAttributes" Value="Bold" />
+                <Setter Property="Shadow">
+                    <Shadow Brush="{StaticResource PrimaryPink}"
+                            Opacity="0.4"
+                            Radius="10"
+                            Offset="0,4" />
+                </Setter>
+            </Style>
+
+            <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="{StaticResource RosePink}" />
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="CornerRadius" Value="15" />
+                <Setter Property="Padding" Value="15,8" />
+                <Setter Property="FontAttributes" Value="Bold" />
+                <Setter Property="Shadow">
+                    <Shadow Brush="{StaticResource RosePink}"
+                            Opacity="0.3"
+                            Radius="8"
+                            Offset="0,3" />
+                </Setter>
+            </Style>
+
+            <Style x:Key="DangerButtonStyle" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="{StaticResource DeepPink}" />
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="CornerRadius" Value="15" />
+                <Setter Property="Padding" Value="15,8" />
+                <Setter Property="FontAttributes" Value="Bold" />
+                <Setter Property="Shadow">
+                    <Shadow Brush="{StaticResource DeepPink}"
+                            Opacity="0.3"
+                            Radius="8"
+                            Offset="0,3" />
+                </Setter>
+            </Style>
+
+            <Style x:Key="WarningButtonStyle" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="{StaticResource LightPink}" />
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="CornerRadius" Value="15" />
+                <Setter Property="Padding" Value="15,8" />
+                <Setter Property="FontAttributes" Value="Bold" />
+                <Setter Property="Shadow">
+                    <Shadow Brush="{StaticResource LightPink}"
+                            Opacity="0.3"
+                            Radius="8"
+                            Offset="0,3" />
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Панель інструментів з градієнтом -->
+        <Border Grid.Row="0" Padding="15" Margin="0">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="{StaticResource PastelPink}" Offset="0.0" />
+                    <GradientStop Color="{StaticResource SoftPink}" Offset="0.5" />
+                    <GradientStop Color="{StaticResource LightPink}" Offset="1.0" />
+                </LinearGradientBrush>
+            </Border.Background>
+
+            <Grid ColumnSpacing="10" RowSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0"
+                        Text="✨ Нова таблиця"
+                        Command="{Binding NewSpreadsheetCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}" />
+
+                <Button Grid.Column="1"
+                        Text="➕ Рядок"
+                        Command="{Binding AddRowCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+
+                <Button Grid.Column="2"
+                        Text="➖ Рядок"
+                        Command="{Binding RemoveRowCommand}"
+                        Style="{StaticResource DangerButtonStyle}" />
+
+                <Button Grid.Column="3"
+                        Text="➕ Стовпець"
+                        Command="{Binding AddColumnCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+
+                <Button Grid.Column="4"
+                        Text="➖ Стовпець"
+                        Command="{Binding RemoveColumnCommand}"
+                        Style="{StaticResource DangerButtonStyle}" />
+
+                <Button Grid.Column="5"
+                        Text="🗑️ Очистити"
+                        Command="{Binding ClearAllCommand}"
+                        Style="{StaticResource WarningButtonStyle}" />
+
+                <Button Grid.Column="7"
+                        Text="💾 Зберегти"
+                        Command="{Binding SaveToGoogleDriveCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}" />
+
+                <Button Grid.Column="8"
+                        Text="📂 Завантажити"
+                        Command="{Binding LoadFromGoogleDriveCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+            </Grid>
+        </Border>
+
+        <!-- Область таблиці з красивим фоном -->
+        <Border Grid.Row="1" Margin="10" Padding="0" BackgroundColor="White"
+                StrokeThickness="0">
+            <Border.Shadow>
+                <Shadow Brush="{StaticResource SoftPink}"
+                        Opacity="0.2"
+                        Radius="15"
+                        Offset="0,5" />
+            </Border.Shadow>
+            <ScrollView Orientation="Both" Padding="10">
+                <Grid x:Name="SpreadsheetGrid" BackgroundColor="#FFFAFA">
+                    <!-- Таблиця буде створена динамічно в коді -->
+                </Grid>
+            </ScrollView>
+        </Border>
+
+        <!-- Панель стану з градієнтом -->
+        <Border Grid.Row="2" Padding="15" Margin="0">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="{StaticResource LightPink}" Offset="0.0" />
+                    <GradientStop Color="{StaticResource SoftPink}" Offset="0.5" />
+                    <GradientStop Color="{StaticResource PastelPink}" Offset="1.0" />
+                </LinearGradientBrush>
+            </Border.Background>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Label Grid.Column="0"
+                       Text="{Binding StatusMessage}"
+                       VerticalOptions="Center"
+                       FontSize="15"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource DeepPink}" />
+
+                <Border Grid.Column="1"
+                        BackgroundColor="White"
+                        Padding="15,8"
+                        StrokeThickness="0">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="20" />
+                    </Border.StrokeShape>
+                    <Border.Shadow>
+                        <Shadow Brush="{StaticResource PrimaryPink}"
+                                Opacity="0.2"
+                                Radius="8"
+                                Offset="0,3" />
+                    </Border.Shadow>
+
+                    <HorizontalStackLayout Spacing="8">
+                        <Label Text="💡 Режим:"
+                               VerticalOptions="Center"
+                               FontAttributes="Bold"
+                               TextColor="{StaticResource DeepPink}" />
+                        <Switch IsToggled="{Binding IsExpressionMode, Mode=TwoWay}"
+                                VerticalOptions="Center"
+                                OnColor="{StaticResource PrimaryPink}"
+                                ThumbColor="{StaticResource DeepPink}" />
+                        <Label Text="{Binding ModeText, StringFormat='{}✨ {0}'}"
+                               VerticalOptions="Center"
+                               FontAttributes="Bold"
+                               FontSize="14"
+                               TextColor="{StaticResource PrimaryPink}" />
+                    </HorizontalStackLayout>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+
+</ContentPage>
