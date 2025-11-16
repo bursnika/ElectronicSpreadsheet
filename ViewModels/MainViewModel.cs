@@ -299,9 +299,8 @@ public class MainViewModel : BaseViewModel
                 return;
             }
 
-            // Показуємо діалог вибору файлу
-            var fileNames = files.Select(f => f.Name).ToArray();
-            Console.WriteLine($"ExecuteLoadFromGoogleDrive: Список файлів: {string.Join(", ", fileNames)}");
+            // Показуємо діалог вибору файлу зі scrollable списком
+            Console.WriteLine($"ExecuteLoadFromGoogleDrive: Відкриваємо діалог вибору файлу");
             var mainPage = Application.Current?.Windows[0]?.Page;
             if (mainPage == null)
             {
@@ -310,31 +309,19 @@ public class MainViewModel : BaseViewModel
                 return;
             }
 
-            Console.WriteLine("ExecuteLoadFromGoogleDrive: Показуємо діалог вибору");
-            var selectedFile = await mainPage.DisplayActionSheet(
-                "Виберіть Google Sheets файл для завантаження",
-                "Скасувати",
-                null,
-                fileNames);
-            Console.WriteLine($"ExecuteLoadFromGoogleDrive: Вибрано файл: {selectedFile}");
+            var fileSelectionPage = new Views.FileSelectionPage(files);
+            await mainPage.Navigation.PushModalAsync(fileSelectionPage);
+            var file = await fileSelectionPage.GetSelectedFileAsync();
+            Console.WriteLine($"ExecuteLoadFromGoogleDrive: Вибрано файл: {file?.Name}");
 
-            if (selectedFile == null || selectedFile == "Скасувати")
+            if (file == null)
             {
                 StatusMessage = "Завантаження скасовано";
                 Console.WriteLine("ExecuteLoadFromGoogleDrive: Завантаження скасовано");
                 return;
             }
 
-            // Знаходимо вибраний файл
-            var file = files.FirstOrDefault(f => f.Name == selectedFile);
-            if (file == null)
-            {
-                StatusMessage = "Файл не знайдено";
-                Console.WriteLine("ExecuteLoadFromGoogleDrive: Файл не знайдено в списку");
-                return;
-            }
-
-            StatusMessage = $"Завантаження {selectedFile}...";
+            StatusMessage = $"Завантаження {file.Name}...";
             Console.WriteLine($"ExecuteLoadFromGoogleDrive: Завантажуємо файл з ID: {file.Id}");
             var loadedSpreadsheet = await _googleDriveService.LoadSpreadsheetAsync(file.Id);
 
@@ -350,7 +337,7 @@ public class MainViewModel : BaseViewModel
 
             InitializeCellViewModels();
             OnPropertyChanged(nameof(Spreadsheet));
-            StatusMessage = $"Завантажено з Google Drive: {selectedFile}";
+            StatusMessage = $"Завантажено з Google Drive: {file.Name}";
             Console.WriteLine("ExecuteLoadFromGoogleDrive: Успішно завантажено");
         }
         catch (Exception ex)
