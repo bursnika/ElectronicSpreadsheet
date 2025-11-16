@@ -1,10 +1,12 @@
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Flows;
 using Google.Apis.Drive.v3;
 using Google.Apis.Services;
 using Google.Apis.Sheets.v4;
 using Google.Apis.Sheets.v4.Data;
 using System.Reflection;
 using Google.Apis.Util.Store;
+using Microsoft.Extensions.Logging;
 
 namespace ElectronicSpreadsheet.Services;
 
@@ -13,11 +15,17 @@ public class GoogleDriveService
     private DriveService? _driveService;
     private SheetsService? _sheetsService;
     private UserCredential? _credential;
+    private readonly ILogger<GoogleDriveService> _logger;
     private readonly string[] _scopes = new[]
     {
         DriveService.Scope.Drive,
         SheetsService.Scope.Spreadsheets
     };
+
+    public GoogleDriveService(ILogger<GoogleDriveService>? logger = null)
+    {
+        _logger = logger ?? LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<GoogleDriveService>();
+    }
 
     private static string TokenPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -36,59 +44,113 @@ public class GoogleDriveService
     {
         try
         {
+            Console.WriteLine($"[AUTH] Starting authentication process. ForceReauth: {forceReauth}");
+            _logger.LogInformation("Starting authentication process. ForceReauth: {ForceReauth}", forceReauth);
+
             if (forceReauth && Directory.Exists(TokenPath))
             {
-                Console.WriteLine($"LoginAsync: Видалення старих токенів з {TokenPath}");
+                _logger.LogInformation("Deleting old tokens from: {TokenPath}", TokenPath);
                 try
                 {
                     Directory.Delete(TokenPath, true);
+                    _logger.LogInformation("Old tokens deleted successfully");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"LoginAsync: Помилка видалення токенів: {ex.Message}");
+                    _logger.LogWarning(ex, "Failed to delete old tokens");
                 }
             }
 
-            var assembly = Assembly.GetExecutingAssembly();
-            var resourceName = "ElectronicSpreadsheet.credentials.json";
-
-            var stream = assembly.GetManifestResourceStream(resourceName);
             Stream credentialStream;
 
-            if (stream == null)
+            try
             {
+                // Try loading from MAUI app package first (for bundled assets)
+                credentialStream = await FileSystem.OpenAppPackageFileAsync("credentials.json");
+                _logger.LogInformation("Loaded credentials from MAUI app package");
+            }
+            catch (FileNotFoundException)
+            {
+                // Fall back to file system (for development)
                 var credPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "credentials.json");
+                _logger.LogInformation("credentials.json not found in app package, checking file system: {Path}", credPath);
+
                 if (!File.Exists(credPath))
                 {
-                    throw new FileNotFoundException("$09; credentials.json =5 7=0945=>");
+                    _logger.LogError("credentials.json not found at {Path}", credPath);
+                    throw new FileNotFoundException("credentials.json file not found. Please add your Google OAuth credentials.", credPath);
                 }
                 credentialStream = File.OpenRead(credPath);
-            }
-            else
-            {
-                credentialStream = stream;
+                _logger.LogInformation("Loaded credentials from file system");
             }
 
             using (credentialStream)
             {
-                Console.WriteLine("LoginAsync: Запуск GoogleWebAuthorizationBroker");
-
                 var secrets = GoogleClientSecrets.FromStream(credentialStream).Secrets;
-                Console.WriteLine($"LoginAsync: ClientId = {secrets.ClientId}");
+                Console.WriteLine($"[AUTH] OAuth ClientId: {secrets.ClientId}");
+                Console.WriteLine($"[AUTH] Token storage path: {TokenPath}");
+                Console.WriteLine($"[AUTH] Requested scopes: {string.Join(", ", _scopes)}");
+                _logger.LogInformation("OAuth ClientId: {ClientId}", secrets.ClientId);
+                _logger.LogInformation("Token storage path: {TokenPath}", TokenPath);
+                _logger.LogInformation("Requested scopes: {Scopes}", string.Join(", ", _scopes));
 
-                Console.WriteLine($"LoginAsync: Токени зберігаються в: {TokenPath}");
-                Console.WriteLine($"LoginAsync: Scopes: {string.Join(", ", _scopes)}");
-
+                // Use custom code receiver for Mac Catalyst
                 var dataStore = new FileDataStore(TokenPath, true);
-                _credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
-                    secrets,
-                    _scopes,
-                    "user",
-                    CancellationToken.None,
-                    dataStore);
+                using var codeReceiver = new MauiWebAuthCodeReceiver();
 
-                Console.WriteLine("LoginAsync: Авторизація успішна");
-                Console.WriteLine($"LoginAsync: User = {_credential.UserId}");
+                _logger.LogInformation("Using MauiWebAuthCodeReceiver with redirect URI: {RedirectUri}", codeReceiver.RedirectUri);
+
+                var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
+                {
+                    ClientSecrets = secrets,
+                    Scopes = _scopes,
+                    DataStore = dataStore
+                });
+
+                _logger.LogInformation("Starting OAuth authorization flow...");
+
+                var token = await flow.LoadTokenAsync("user", CancellationToken.None);
+                if (token == null || (forceReauth && token.IsExpired(flow.Clock)))
+                {
+                    Console.WriteLine("[AUTH] Token not found or expired. Starting browser authentication...");
+                    _logger.LogInformation("Token not found or expired. Starting browser authentication...");
+
+                    var authUrl = flow.CreateAuthorizationCodeRequest(codeReceiver.RedirectUri);
+                    authUrl.Scope = string.Join(" ", _scopes);
+
+                    Console.WriteLine("[AUTH] Opening browser for authentication...");
+                    var response = await codeReceiver.ReceiveCodeAsync(authUrl, CancellationToken.None);
+
+                    if (!string.IsNullOrEmpty(response.Error))
+                    {
+                        Console.WriteLine($"[AUTH] ERROR: OAuth error: {response.Error}");
+                        _logger.LogError("OAuth error: {Error}", response.Error);
+                        throw new Exception($"OAuth authorization failed: {response.Error}");
+                    }
+
+                    if (string.IsNullOrEmpty(response.Code))
+                    {
+                        Console.WriteLine("[AUTH] ERROR: No authorization code received");
+                        _logger.LogError("No authorization code received");
+                        throw new Exception("Authorization code not received from OAuth provider");
+                    }
+
+                    Console.WriteLine("[AUTH] Authorization code received successfully");
+                    _logger.LogInformation("Authorization code received successfully");
+
+                    Console.WriteLine("[AUTH] Exchanging code for token...");
+                    token = await flow.ExchangeCodeForTokenAsync("user", response.Code, codeReceiver.RedirectUri, CancellationToken.None);
+                    Console.WriteLine("[AUTH] Token exchanged successfully");
+                    _logger.LogInformation("Token exchanged successfully");
+                }
+                else
+                {
+                    Console.WriteLine("[AUTH] Using existing valid token");
+                    _logger.LogInformation("Using existing valid token");
+                }
+
+                _credential = new UserCredential(flow, "user", token);
+                _logger.LogInformation("Authentication successful. User: {UserId}", _credential.UserId);
             }
 
             _driveService = new DriveService(new BaseClientService.Initializer()
@@ -103,11 +165,14 @@ public class GoogleDriveService
                 ApplicationName = "Electronic Spreadsheet"
             });
 
+            _logger.LogInformation("Google Drive and Sheets services initialized successfully");
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"><8;:0 02B>@870FVW: {ex.Message}");
+            Console.WriteLine($"[AUTH] EXCEPTION: {ex.GetType().Name}: {ex.Message}");
+            Console.WriteLine($"[AUTH] Stack trace: {ex.StackTrace}");
+            _logger.LogError(ex, "Authentication failed: {Message}", ex.Message);
             return false;
         }
     }
@@ -117,14 +182,15 @@ public class GoogleDriveService
     {
         if (_driveService == null)
         {
-            throw new InvalidOperationException("!?>G0B:C ?>B@V1=> 02B>@87C20B8AO");
+            _logger.LogError("Attempted to get files but service is not authenticated");
+            throw new InvalidOperationException("You must authenticate before accessing Google Drive");
         }
 
         var files = new List<GoogleDriveFile>();
 
         try
         {
-            Console.WriteLine("GetGoogleSheetsFilesAsync: Початок запиту до Google Drive");
+            _logger.LogInformation("Fetching Google Sheets files from Drive");
 
             var request = _driveService.Files.List();
             request.Q = "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false";
@@ -132,18 +198,17 @@ public class GoogleDriveService
             request.OrderBy = "modifiedTime desc";
             request.PageSize = 100;
 
-            Console.WriteLine($"GetGoogleSheetsFilesAsync: Query = {request.Q}");
-            Console.WriteLine($"GetGoogleSheetsFilesAsync: Fields = {request.Fields}");
+            _logger.LogDebug("Query: {Query}, Fields: {Fields}", request.Q, request.Fields);
 
             var result = await request.ExecuteAsync();
 
-            Console.WriteLine($"GetGoogleSheetsFilesAsync: Отримано файлів: {result.Files?.Count ?? 0}");
+            _logger.LogInformation("Retrieved {Count} files from Google Drive", result.Files?.Count ?? 0);
 
             if (result.Files != null)
             {
                 foreach (var file in result.Files)
                 {
-                    Console.WriteLine($"GetGoogleSheetsFilesAsync: Файл - Id={file.Id}, Name={file.Name}");
+                    _logger.LogDebug("File found - Id: {Id}, Name: {Name}", file.Id, file.Name);
 
                     files.Add(new GoogleDriveFile
                     {
@@ -157,17 +222,16 @@ public class GoogleDriveService
             }
             else
             {
-                Console.WriteLine("GetGoogleSheetsFilesAsync: result.Files is null");
+                _logger.LogWarning("Files list is null in API response");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Помилка отримання файлів: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            _logger.LogError(ex, "Failed to retrieve Google Sheets files");
             throw;
         }
 
-        Console.WriteLine($"GetGoogleSheetsFilesAsync: Повертаємо {files.Count} файлів");
+        _logger.LogInformation("Returning {Count} files", files.Count);
         return files;
     }
 
@@ -175,13 +239,18 @@ public class GoogleDriveService
     {
         if (_sheetsService == null)
         {
-            throw new InvalidOperationException("!?>G0B:C ?>B@V1=> 02B>@87C20B8AO");
+            _logger.LogError("Attempted to load spreadsheet but service is not authenticated");
+            throw new InvalidOperationException("You must authenticate before accessing Google Sheets");
         }
 
         try
         {
+            _logger.LogInformation("Loading spreadsheet with ID: {FileId}", fileId);
+
             var spreadsheetRequest = _sheetsService.Spreadsheets.Get(fileId);
             var spreadsheetData = await spreadsheetRequest.ExecuteAsync();
+
+            _logger.LogDebug("Spreadsheet metadata retrieved: {Title}", spreadsheetData.Properties.Title);
 
             if (spreadsheetData?.Sheets == null || spreadsheetData.Sheets.Count == 0)
             {
@@ -234,11 +303,12 @@ public class GoogleDriveService
                 }
             }
 
+            _logger.LogInformation("Spreadsheet loaded successfully: {Name}", spreadsheet.Name);
             return spreadsheet;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"><8;:0 7020=B065==O B01;8FV: {ex.Message}");
+            _logger.LogError(ex, "Failed to load spreadsheet with ID: {FileId}", fileId);
             throw;
         }
     }
@@ -247,12 +317,13 @@ public class GoogleDriveService
     {
         if (_driveService == null)
         {
-            throw new InvalidOperationException("!?>G0B:C ?>B@V1=> 02B>@87C20B8AO");
+            _logger.LogError("Attempted to save spreadsheet but service is not authenticated");
+            throw new InvalidOperationException("You must authenticate before saving to Google Drive");
         }
 
         try
         {
-            Console.WriteLine($"SaveSpreadsheetAsync: Початок збереження {spreadsheet.Name}");
+            _logger.LogInformation("Starting save operation for spreadsheet: {Name}", spreadsheet.Name);
 
             var csv = new System.Text.StringBuilder();
             for (int row = 0; row < spreadsheet.Rows; row++)
@@ -294,21 +365,21 @@ public class GoogleDriveService
                 }
 
                 spreadsheet.GoogleDriveFileId = request.ResponseBody.Id;
-                Console.WriteLine($"SaveSpreadsheetAsync: Файл збережено з ID: {spreadsheet.GoogleDriveFileId}");
+                _logger.LogInformation("Spreadsheet saved successfully with ID: {FileId}", spreadsheet.GoogleDriveFileId);
             }
             finally
             {
-                // Видаляємо тимчасовий файл
+                // Clean up temporary file
                 if (File.Exists(tempFile))
                 {
                     File.Delete(tempFile);
+                    _logger.LogDebug("Temporary file deleted: {TempFile}", tempFile);
                 }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Помилка збереження таблиці: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            _logger.LogError(ex, "Failed to save spreadsheet: {Name}", spreadsheet.Name);
             throw;
         }
     }
@@ -317,12 +388,13 @@ public class GoogleDriveService
     {
         if (_sheetsService == null || string.IsNullOrEmpty(spreadsheet.GoogleDriveFileId))
         {
-            throw new InvalidOperationException("Неможливо оновити таблицю");
+            _logger.LogError("Cannot update spreadsheet - service not authenticated or no file ID");
+            throw new InvalidOperationException("Cannot update spreadsheet");
         }
 
         try
         {
-            Console.WriteLine($"UpdateSpreadsheetAsync: Оновлення файлу {spreadsheet.GoogleDriveFileId}");
+            _logger.LogInformation("Updating spreadsheet file: {FileId}", spreadsheet.GoogleDriveFileId);
 
             var spreadsheetRequest = _sheetsService.Spreadsheets.Get(spreadsheet.GoogleDriveFileId);
             var spreadsheetData = await spreadsheetRequest.ExecuteAsync();
@@ -359,12 +431,11 @@ public class GoogleDriveService
 
             var updateResponse = await updateRequest.ExecuteAsync();
 
-            Console.WriteLine($"UpdateSpreadsheetAsync: Оновлено {updateResponse.UpdatedCells} клітинок");
+            _logger.LogInformation("Spreadsheet updated successfully. Updated {CellCount} cells", updateResponse.UpdatedCells);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Помилка оновлення таблиці: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            _logger.LogError(ex, "Failed to update spreadsheet: {FileId}", spreadsheet.GoogleDriveFileId);
             throw;
         }
     }
@@ -373,16 +444,19 @@ public class GoogleDriveService
     {
         if (_driveService == null)
         {
-            throw new InvalidOperationException("Спочатку потрібно авторизуватися");
+            _logger.LogError("Attempted to upload file but service is not authenticated");
+            throw new InvalidOperationException("You must authenticate before uploading files");
         }
 
         if (!File.Exists(filePath))
         {
-            throw new FileNotFoundException("Файл не знайдено", filePath);
+            _logger.LogError("File not found: {FilePath}", filePath);
+            throw new FileNotFoundException("File not found", filePath);
         }
 
         try
         {
+            _logger.LogInformation("Uploading file: {FilePath}, MIME type: {MimeType}", filePath, mimeType);
             var fileMetadata = new Google.Apis.Drive.v3.Data.File
             {
                 Name = Path.GetFileName(filePath),
@@ -395,21 +469,22 @@ public class GoogleDriveService
 
             if (result.Status != Google.Apis.Upload.UploadStatus.Completed)
             {
-                throw new Exception($"Помилка завантаження файлу: {result.Exception?.Message}");
+                _logger.LogError("File upload failed: {Message}", result.Exception?.Message);
+                throw new Exception($"File upload failed: {result.Exception?.Message}");
             }
 
-            Console.WriteLine($"UploadFileAsync: Файл успішно завантажено з ID: {request.ResponseBody?.Id}");
+            _logger.LogInformation("File uploaded successfully with ID: {FileId}", request.ResponseBody?.Id);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Помилка завантаження файлу: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            _logger.LogError(ex, "Failed to upload file: {FilePath}", filePath);
             throw;
         }
     }
 
     public void Logout()
     {
+        _logger.LogInformation("Logging out and disposing Google services");
         _credential = null;
         _driveService?.Dispose();
         _sheetsService?.Dispose();

@@ -4,8 +4,6 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ElectronicSpreadsheet", "ElectronicSpreadsheet.csproj", "{F2078108-9605-760C-F926-8FDFAFBAB0C4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ElectronicSpreadsheet.Tests", "ElectronicSpreadsheet.Tests\ElectronicSpreadsheet.Tests.csproj", "{A44AAA0C-D4ED-6692-28AE-2CC7B83352A9}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

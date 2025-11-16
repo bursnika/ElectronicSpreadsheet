@@ -3,6 +3,14 @@
     "Windows Machine": {
       "commandName": "Project",
       "nativeDebugging": false
+    },
+    "Mac Catalyst": {
+      "commandName": "Project",
+      "nativeDebugging": false,
+      "commandLineArgs": "",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
     }
   }
 }

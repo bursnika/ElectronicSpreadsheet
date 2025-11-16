@@ -43,3 +43,7 @@ token.json/
 *.nupkg
 **/packages/*
 !**/packages/build/
+
+# Backup folders
+*.bak/
+**/ElectronicSpreadsheet.Tests.bak/

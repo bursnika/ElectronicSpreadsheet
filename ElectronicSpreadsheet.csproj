@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net9.0-windows10.0.19041.0;net9.0-maccatalyst</TargetFrameworks>
+		<!-- Temporarily targeting only MacCatalyst for macOS development -->
+		<!-- To add Windows back, use: <TargetFrameworks>net9.0-windows10.0.19041.0;net9.0-maccatalyst</TargetFrameworks> -->
+		<TargetFrameworks>net9.0-maccatalyst</TargetFrameworks>
 
 		<!-- Вказуємо версію SDK для MacCatalyst, сумісну з Xcode 16.2 -->
 		<UseMacCatalystSdkVersion>16.2</UseMacCatalystSdkVersion>
@@ -9,7 +11,7 @@
 		<!-- Вимкнути підпис коду для debug збірки -->
 		<CodesignKey Condition="'$(Configuration)' == 'Debug'">-</CodesignKey>
 		<CodesignProvision Condition="'$(Configuration)' == 'Debug'"></CodesignProvision>
-		<CodesignEntitlements Condition="'$(Configuration)' == 'Debug'"></CodesignEntitlements>
+		<CodesignEntitlements Condition="'$(Configuration)' == 'Debug'">Platforms\MacCatalyst\Entitlements.Debug.plist</CodesignEntitlements>
 
 		<!-- Note for MacCatalyst:
 		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
@@ -73,11 +75,9 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.8" />
 	</ItemGroup>
 
-	<!-- Google Drive credentials file (optional - will be loaded from base directory if present) -->
+	<!-- Google Drive credentials file -->
 	<ItemGroup>
-		<None Update="credentials.json" Condition="Exists('credentials.json')">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
+		<MauiAsset Include="credentials.json" Condition="Exists('credentials.json')" LogicalName="credentials.json" />
 	</ItemGroup>
 
 	<!-- Target to clean extended attributes before codesigning -->
