@@ -190,10 +190,11 @@ public class GoogleDriveService
 
         try
         {
-            _logger.LogInformation("Fetching Google Sheets files from Drive");
+            _logger.LogInformation("Fetching Google Sheets and Excel files created by user from Drive");
 
             var request = _driveService.Files.List();
-            request.Q = "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false";
+            // Filter for Google Sheets OR Excel files, created by me, not trashed
+            request.Q = "(mimeType='application/vnd.google-apps.spreadsheet' or mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') and 'me' in owners and trashed=false";
             request.Fields = "files(id, name, modifiedTime, size, webViewLink)";
             request.OrderBy = "modifiedTime desc";
             request.PageSize = 100;
